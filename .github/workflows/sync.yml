@@ -1,0 +1,61 @@
+name: Sync Fork
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at 00:00 UTC
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Get latest tag from upstream
+      id: latest_upstream
+      run: |
+        LATEST_UPSTREAM=$(curl -s https://api.github.com/repos/PX4/PX4-Autopilot/releases/latest | jq -r .tag_name)
+        echo "::set-output name=tag::$LATEST_UPSTREAM"
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Get latest tag from fork
+      id: latest_fork
+      run: |
+        LATEST_FORK=$(git describe --tags --abbrev=0)
+        echo "::set-output name=tag::$LATEST_FORK"
+
+    - name: Compare latest tags
+      id: compare_tags
+      run: |
+        LATEST_UPSTREAM=${{ steps.latest_upstream.outputs.tag }}
+        LATEST_FORK=${{ steps.latest_fork.outputs.tag }}
+        if [ "$(printf '%s\n' "$LATEST_FORK" "$LATEST_UPSTREAM" | sort -V | head -n1)" = "$LATEST_FORK" ]; then
+          echo "::set-output name=should_update::true"
+        else
+          echo "::set-output name=should_update::false"
+        fi
+      shell: bash
+
+    - name: Update from Upstream
+      if: steps.compare_tags.outputs.should_update == 'true'
+      run: |
+        git fetch upstream
+        git checkout -b sync-upstream
+        git merge upstream/main
+
+    - name: Push changes
+      if: steps.compare_tags.outputs.should_update == 'true'
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: sync-upstream
+
+    - name: Create Pull Request
+      if: steps.compare_tags.outputs.should_update == 'true'
+      uses: peter-evans/create-pull-request@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        title: "Sync with upstream"
+        body: "This is an automated pull request to sync with the upstream repository."
+        branch: "sync-upstream"
