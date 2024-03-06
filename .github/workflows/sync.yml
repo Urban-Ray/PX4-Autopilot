@@ -12,7 +12,7 @@ jobs:
       id: latest_upstream
       run: |
         LATEST_UPSTREAM=$(curl -s https://api.github.com/repos/PX4/PX4-Autopilot/releases/latest | jq -r .tag_name)
-        echo "::set-output name=tag::$LATEST_UPSTREAM"
+        echo "$LATEST_UPSTREAM" >> $GITHUB_ENV
 
     - name: Checkout code
       uses: actions/checkout@v2
@@ -23,7 +23,7 @@ jobs:
       id: latest_fork
       run: |
         LATEST_FORK=$(git describe --tags --abbrev=0)
-        echo "::set-output name=tag::$LATEST_FORK"
+        echo "tag::$LATEST_FORK" >> $GITHUB_ENV
 
     - name: Compare latest tags
       id: compare_tags
@@ -31,9 +31,9 @@ jobs:
         LATEST_UPSTREAM=${{ steps.latest_upstream.outputs.tag }}
         LATEST_FORK=${{ steps.latest_fork.outputs.tag }}
         if [ "$(printf '%s\n' "$LATEST_FORK" "$LATEST_UPSTREAM" | sort -V | head -n1)" = "$LATEST_FORK" ]; then
-          echo "::set-output name=should_update::true"
+          echo "should_update::true" >> $GITHUB_ENV
         else
-          echo "::set-output name=should_update::false"
+          echo "should_update::false" >> $GITHUB_ENV
         fi
       shell: bash
 
